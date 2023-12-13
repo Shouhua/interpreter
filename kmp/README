@@ -1,0 +1,37 @@
+## Search substring *needle* in the string *haystack*
+- KMP: Knuth-Morris-Pratt Algorithm
+- PMT: Partial Match Table
+- DFA: Deterministic Finite Automa
+
+### Navie mehtod
+
+### [KMP with PMT(Partial Match Table)](http://jakeboxer.com/blog/2009/12/13/the-knuth-morris-pratt-algorithm-in-my-own-words/)
+KMP主要是search string最多遍历一遍，主要是处理pattern string的索引位置
+1. PMT概念
+
+|index: | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 
+|---|---|---|---|---|---|---|---|---|
+|char:  | a | b | a | b | a | b | c | a |
+|value: | 0 | 0 | 1 | 2 | 3 | 4 | 0 | 1 |
+
+概念举例
+- Pattern String: *abababca*
+- Proper prefixes: a ab aba abab ababa ababab abababc 
+- Proper suffixes: a ca bca abca babca ababca babaca abababa<br>
+value列是prefixes和suffixes相同字符串中取最长的长度, 以上就是patter string在index = 7的时候的前缀和后缀，相同的1个字符串"a"，所以下表中value = len(a); 再比如:
+- Pattern String: *ababa*
+- Proper prefixes: a ab aba abab 
+- Proper suffixes: a ba aba baba
+
+value = len(aba) = 3
+
+2. 使用PMT
+
+3. 程序实现PMT
+
+### [KMP with DFA](https://zhuanlan.zhihu.com/p/83334559)
+dp[j][c] = next
+
+0<= j < M 代表当前状态
+0<= c < 256 代表输入字符
+0<= next <= M 代表下一个状态
