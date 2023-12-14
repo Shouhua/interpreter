@@ -1,6 +1,6 @@
-CFLAGS := -Wall -Wextra -pedantic -g -pg
+CFLAGS := -Wall -Wextra -pedantic -g
 
-.PHONY: mastache run clean ast gprof valgrind
+.PHONY: mastache run clean ast gprof valgrind gdb
 
 # make run ARGS="test.txt test.json"
 run: mastache
@@ -17,9 +17,11 @@ mastache: mastache.c
 
 
 clean:
-	@rm -vf mastache
+	@rm -vf mastache gmon.out
 
+gprof: CFLAGS += -pg
 gprof: mastache
+	@gcc ${CFLAGS} -o mastache mastache.c cJSON.c
 	@time ./mastache ${ARGS}
 	@gprof mastache gmon.out
 
@@ -29,4 +31,5 @@ valgrind:
 gdb: mastache
 	gdb --args mastache test.txt test.json
 
-#  gdb mastache ${COREDUMP_DIR}/$(ls ${COREDUMP_DIR} -t | head -n1)
+# debug coredump
+# gdb mastache ${COREDUMP_DIR}/$(ls ${COREDUMP_DIR} -t | head -n1)

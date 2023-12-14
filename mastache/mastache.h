@@ -11,16 +11,16 @@
 
 typedef enum
 {
-    Root,
+    Root = 1 << 0,
 
-    Literal,
-    Variable,
-    SectionStart,
-    SectionEnd,
+    Literal = 1 << 1,
+    Variable = 1 << 2,
+    SectionStart = 1 << 3,
+    SectionEnd = 1 << 4,
 
-    Newline,
-    Whitespace,
-    End
+    Newline = 1 << 5,
+    Whitespace = 1 << 6,
+    End = 1 << 7
 } NType;
 
 struct node
@@ -38,13 +38,15 @@ struct node
 
 struct line
 {
+    int type;          // 当前行所有node type的集合
     long num;          // 第几行
     int is_root;       // 是否是链表头
     int is_standalone; // 是否是独立行
 
-    struct node *children; // node节点链表
-    int child_num;         // node节点个数
-    struct node *last_child;
+    struct node *children;         // node节点链表
+    int child_num;                 // node节点个数
+    struct node *last_child;       // 快速定位到最后一行，用于reander section中
+    struct node *first_real_child; // reander section中快速定位到渲染的node, 非standalone行为NULL
 
     struct line *next;
 };

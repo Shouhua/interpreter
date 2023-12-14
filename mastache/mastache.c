@@ -143,6 +143,7 @@ ok:
 struct line *new_line()
 {
 	struct line *new_line = (struct line *)malloc(sizeof(struct line));
+	new_line->type = 0;
 	new_line->num = 1;
 	new_line->is_root = 0;
 	new_line->is_standalone = 1;
@@ -150,6 +151,7 @@ struct line *new_line()
 	new_line->child_num = 0;
 	new_line->last_child = NULL;
 	new_line->next = NULL;
+	new_line->first_real_child = NULL;
 	return new_line;
 }
 
@@ -190,6 +192,9 @@ void add_line_child(struct node *child)
 			last = last->next;
 		last->next = child;
 	}
+	current_line->type |= child->type;
+	if (!current_line->first_real_child && child->type != Whitespace && child->type && Newline && child->type != End)
+		current_line->first_real_child = child;
 }
 
 void init_parse()
@@ -226,7 +231,12 @@ void parse()
 			add_line_child(lookahead);
 			if (lookahead->type == Newline || lookahead->type == End)
 			{
-				current_line->last_child = lookahead;
+				current_line->last_child = lookahead; // 填充last child
+				// 矫正is_standalone
+				if (current_line->is_standalone && !(current_line->type & (SectionStart | SectionEnd)))
+					current_line->is_standalone = 0;
+				if (!current_line->is_standalone)
+					current_line->first_real_child = NULL;
 				break;
 			}
 			lookahead = lex();
@@ -356,33 +366,32 @@ char *lookup(char *key)
 }
 
 // 如果buf为\n, 开始执行下一行，知道section_end
-#define REANDER_SECTION_NODE                      \
-	while (rnode && rnode != end_node)            \
-	{                                             \
-		render_node(rnode);                       \
-		if (rnode->next == NULL)                  \
-		{                                         \
-			rnode = rnode->linfo->next->children; \
-		}                                         \
-		else                                      \
-			rnode = rnode->next;                  \
+#define REANDER_SECTION_NODE                                                                          \
+	while (rnode && rnode != end_node)                                                                \
+	{                                                                                                 \
+		render_node(rnode);                                                                           \
+		/*渲染下一行*/                                                                           \
+		if (rnode->next == NULL)                                                                      \
+		{                                                                                             \
+			struct line *next_line = rnode->linfo->next;                                              \
+			/* 如果下一行是结束行*/                                                          \
+			if (next_line->num == end_node->linfo->num && next_line->is_standalone)                   \
+				rnode = end_node;                                                                     \
+			else /* 如果下一行不是结束行*/                                                  \
+				rnode = next_line->is_standalone ? next_line->first_real_child : next_line->children; \
+		}                                                                                             \
+		else                                                                                          \
+			rnode = rnode->next;                                                                      \
 	}
 
 void render_section(struct node *start)
 {
-	// 添加新的context
-	cJSON *new_context = cJSON_GetObjectItemCaseSensitive(current_stack->context, start->value);
-	// if (!new_context)
-	// {
-	// 	printf("找不到环境key: %s\n", start->value);
-	// }
-	set_context(new_context);
-
 	struct node *section_end, *start_node, *end_node;
 	int is_standalone;
 
 	is_standalone = start->linfo->is_standalone;
-	rnode = start_node = is_standalone ? start->linfo->next->children : start->next; // standalone跳过SectionStart行
+	rnode = start_node = is_standalone ? (start->linfo->next->is_standalone ? start->linfo->next->first_real_child : start->linfo->next->children)
+									   : start->next; // standalone跳过SectionStart行
 	section_end = start->spair;
 	// 大概率不会到这里，编译阶段已经处理
 	if (!section_end)
@@ -390,8 +399,15 @@ void render_section(struct node *start)
 
 	end_node = section_end->linfo->is_standalone ? section_end->linfo->children : section_end;
 
-	// if (new_context == NULL)
-	// 	goto end;
+	// 添加新的context
+	// cJSON *new_context = cJSON_GetObjectItemCaseSensitive(current_stack->context, start->value);
+	cJSON *new_context = recursive_context_search(start->value);
+	// 没有内容, 上下文为null, false, 或者找不到上下文
+	if (!new_context || start_node == section_end || cJSON_IsNull(new_context) || cJSON_IsFalse(new_context))
+	{
+		goto end;
+	}
+	set_context(new_context);
 
 	if (cJSON_IsArray(new_context))
 	{
@@ -416,6 +432,7 @@ void render_section(struct node *start)
 	free(d);
 	d = NULL;
 
+end:
 	rline = end_node->linfo;
 	rnode = end_node->linfo->is_standalone ? end_node->linfo->last_child : end_node;
 }
@@ -443,8 +460,10 @@ void render_node(struct node *n)
 
 void render_line(struct line *l)
 {
-	rnode = l->children;
-	// TODO: 另一种实现 最后一个节点的next指向下一行的节点，rline当前行信息与next node不一样就可以跳出了
+	if (l->is_standalone)
+		rnode = l->first_real_child;
+	else
+		rnode = l->children;
 	while (rnode && rnode->type != End)
 	{
 		render_node(rnode);
@@ -481,7 +500,8 @@ void print_ast()
 	while (l != NULL)
 	{
 		int num = 0;
-		fprintf(stdout, "LINE %ld, is standalone: %d, children number: %d, last child: %p\n", l->num, l->is_standalone, l->child_num, (void *)(l->last_child));
+		fprintf(stdout, "LINE %ld, is standalone: %d, children number: %d, last child: %p, first real child: %p\n",
+				l->num, l->is_standalone, l->child_num, (void *)(l->last_child), (void *)(l->first_real_child));
 		struct node *n = l->children;
 		while (n != NULL)
 		{
